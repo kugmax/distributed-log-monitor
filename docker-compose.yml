@@ -36,5 +36,15 @@ services:
        - 8084:8084
     networks:
         - mynet
+
+  zipkin:
+    image: openzipkin/zipkin
+    container_name: zipkin
+    ports:
+       - 9411:9411
+    networks:
+        - mynet
+
+
 networks:
   mynet:
