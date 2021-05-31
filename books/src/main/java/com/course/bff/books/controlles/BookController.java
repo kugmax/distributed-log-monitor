@@ -1,5 +1,6 @@
 package com.course.bff.books.controlles;
 
+import com.course.bff.books.db.RedisClient;
 import com.course.bff.books.models.Book;
 import com.course.bff.books.requests.CreateBookCommand;
 import com.course.bff.books.responses.BookResponse;
@@ -17,6 +18,8 @@ import org.asynchttpclient.util.HttpConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.sleuth.SpanName;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,14 +41,11 @@ public class BookController {
 
     private final static Logger logger = LoggerFactory.getLogger(BookController.class);
     private final BookService bookService;
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final RedisClient redisClient;
 
-    @Value("${redis.topic}")
-    private String redisTopic;
-
-    public BookController(BookService bookService, RedisTemplate<String, Object> redisTemplate) {
+    public BookController(BookService bookService, RedisClient redisClient) {
         this.bookService = bookService;
-        this.redisTemplate = redisTemplate;
+        this.redisClient = redisClient;
     }
 
     @GetMapping()
@@ -77,17 +77,8 @@ public class BookController {
         logger.info("Create books");
         Book book = this.bookService.create(createBookCommand);
         BookResponse authorResponse = createBookResponse(book);
-        this.sendPushNotification(authorResponse);
+        redisClient.sendPushNotification(authorResponse);
         return authorResponse;
-    }
-
-    private void sendPushNotification(BookResponse bookResponse) {
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        try {
-            redisTemplate.convertAndSend(redisTopic, gson.toJson(bookResponse));
-        } catch (Exception e) {
-            logger.error("Push Notification Error", e);
-        }
     }
 
     private BookResponse createBookResponse(Book book) {
