@@ -2,6 +2,8 @@ version: "3"
 services:
   authors:
     image: estoyanov/bff-authors-service:1.0
+    volumes:
+      - ./logs:/logs
     container_name: bff-authors-service
     ports:
       - 8081:8081
@@ -9,6 +11,8 @@ services:
       - mynet
   books:
     image: estoyanov/bff-books-service:1.0
+    volumes:
+      - ./logs:/logs
     container_name: bff-books-service
     ports:
       - 8082:8082
