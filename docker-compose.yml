@@ -2,6 +2,8 @@ version: "3"
 services:
   authors:
     image: estoyanov/bff-authors-service:1.0
+    volumes:
+      - ./logs:/logs
     container_name: bff-authors-service
     ports:
       - 8081:8081
@@ -9,6 +11,8 @@ services:
       - mynet
   books:
     image: estoyanov/bff-books-service:1.0
+    volumes:
+      - ./logs:/logs
     container_name: bff-books-service
     ports:
       - 8082:8082
@@ -45,6 +49,37 @@ services:
     networks:
         - mynet
 
+
+  elasticsearch:
+    image: "docker.elastic.co/elasticsearch/elasticsearch:7.12.1"
+    container_name: bff-elasticsearch
+    environment:
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - "discovery.type=single-node"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+
+  kibana:
+      image: "docker.elastic.co/kibana/kibana:7.12.1"
+      container_name: bff-kibana
+      ports:
+          - "5601:5601"
+
+  filebeat:
+      image: "docker.elastic.co/beats/filebeat:7.12.1"
+      container_name: bff-filebeat
+      user: root
+      volumes:
+          - "./filebeat/filebeat.yaml:/usr/share/filebeat/filebeat.yml:ro"
+          - /var/lib/docker:/var/lib/docker:ro
+          - /var/run/docker.sock:/var/run/docker.sock
+          - "./logs:/usr/share/filebeat/logs"
+      command: ["--strict.perms=false"]
+
+volumes:
+    elasticsearch_data:
 
 networks:
   mynet:
