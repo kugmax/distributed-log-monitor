@@ -6,32 +6,24 @@ import com.course.bff.authors.responses.AuthorResponse;
 import com.course.bff.authors.services.AuthorService;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import org.asynchttpclient.AsyncHttpClient;
-import org.asynchttpclient.DefaultAsyncHttpClientConfig;
-import org.asynchttpclient.Dsl;
-import org.asynchttpclient.ListenableFuture;
-import org.asynchttpclient.Request;
-import org.asynchttpclient.RequestBuilder;
-import org.asynchttpclient.Response;
-import org.asynchttpclient.util.HttpConstants;
+import io.micrometer.core.annotation.Counted;
+import io.micrometer.core.annotation.Timed;
+import io.micrometer.core.instrument.Counter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 
+@Timed(value = "execution_duration", extraTags = {"AuthorController", "authors-service"})
 @RestController
 @RequestMapping("api/v1/authors")
 public class AuthorController {
@@ -40,14 +32,17 @@ public class AuthorController {
     private String redisTopic;
 
     private final static Logger logger = LoggerFactory.getLogger(AuthorController.class);
-    private final AuthorService authorService;
-    private final RedisTemplate<String, Object> redisTemplate;
 
-    public AuthorController(AuthorService authorService, RedisTemplate<String, Object> redisTemplate) {
-        this.authorService = authorService;
-        this.redisTemplate = redisTemplate;
-    }
+    @Autowired
+    private AuthorService authorService;
 
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+
+    @Autowired
+    private Counter errorCounter;
+
+    @Counted(value = "request_count", extraTags = {"AuthorController", "authors-service"})
     @GetMapping()
     public Collection<AuthorResponse> getAuthors() {
         logger.info("Get authors");
@@ -60,6 +55,7 @@ public class AuthorController {
         return authorResponses;
     }
 
+    @Counted(value = "request_count", extraTags = {"AuthorController", "authors-service"})
     @GetMapping("/{id}")
     public AuthorResponse getById(@PathVariable UUID id) {
         logger.info(String.format("Find authors by %s", id));
@@ -71,6 +67,7 @@ public class AuthorController {
         return createAuthorResponse(authorSearch.get());
     }
 
+    @Counted(value = "request_count", extraTags = {"AuthorController", "authors-service"})
     @PostMapping()
     public AuthorResponse createAuthors(@RequestBody CreateAuthorCommand createAuthorCommand) {
         logger.info("Create authors");
@@ -80,6 +77,11 @@ public class AuthorController {
         return authorResponse;
     }
 
+    @ExceptionHandler(Exception.class)
+    public void handleError(HttpServletRequest req, Exception ex) throws Exception {
+        errorCounter.increment();
+        throw ex;
+    }
 
     private void sendPushNotification(AuthorResponse authorResponse) {
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
