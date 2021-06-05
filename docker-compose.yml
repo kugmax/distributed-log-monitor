@@ -33,6 +33,16 @@ services:
     networks:
       - mynet
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: bff-prometheus
+    ports:
+      - 9090:9090
+    networks:
+      - mynet
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
   bff-frontend:
     image: estoyanov/bff-frontend:1.0
     container_name: bff-frontend-service
