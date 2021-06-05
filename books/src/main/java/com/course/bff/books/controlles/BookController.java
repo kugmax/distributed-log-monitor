@@ -5,49 +5,38 @@ import com.course.bff.books.models.Book;
 import com.course.bff.books.requests.CreateBookCommand;
 import com.course.bff.books.responses.BookResponse;
 import com.course.bff.books.services.BookService;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import org.asynchttpclient.AsyncHttpClient;
-import org.asynchttpclient.DefaultAsyncHttpClientConfig;
-import org.asynchttpclient.Dsl;
-import org.asynchttpclient.ListenableFuture;
-import org.asynchttpclient.Request;
-import org.asynchttpclient.RequestBuilder;
-import org.asynchttpclient.Response;
-import org.asynchttpclient.util.HttpConstants;
+import io.micrometer.core.annotation.Counted;
+import io.micrometer.core.annotation.Timed;
+import io.micrometer.core.instrument.Counter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cloud.sleuth.SpanName;
-import org.springframework.cloud.sleuth.annotation.NewSpan;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 
+@Timed(value = "execution_duration", extraTags = {"BookController", "books-service"})
 @RestController
 @RequestMapping("api/v1/books")
 public class BookController {
 
     private final static Logger logger = LoggerFactory.getLogger(BookController.class);
-    private final BookService bookService;
-    private final RedisClient redisClient;
 
-    public BookController(BookService bookService, RedisClient redisClient) {
-        this.bookService = bookService;
-        this.redisClient = redisClient;
-    }
+    @Autowired
+    private BookService bookService;
 
+    @Autowired
+    private RedisClient redisClient;
+
+    @Autowired
+    private Counter errorCounter;
+
+    @Counted(value = "request_count", extraTags = {"BookController", "books-service"})
     @GetMapping()
     public Collection<BookResponse> getBooks() {
         logger.info("Get book list");
@@ -60,6 +49,7 @@ public class BookController {
         return bookResponses;
     }
 
+    @Counted(value = "request_count", extraTags = {"BookController", "books-service"})
     @GetMapping("/{id}")
     public BookResponse getById(@PathVariable UUID id) {
         logger.info(String.format("Find book by id %s", id));
@@ -72,6 +62,7 @@ public class BookController {
         return createBookResponse(bookSearch.get());
     }
 
+    @Counted(value = "request_count", extraTags = {"BookController", "books-service"})
     @PostMapping()
     public BookResponse createBooks(@RequestBody CreateBookCommand createBookCommand) {
         logger.info("Create books");
@@ -79,6 +70,12 @@ public class BookController {
         BookResponse authorResponse = createBookResponse(book);
         redisClient.sendPushNotification(authorResponse);
         return authorResponse;
+    }
+
+    @ExceptionHandler(Exception.class)
+    public void handleError(HttpServletRequest req, Exception ex) throws Exception {
+        errorCounter.increment();
+        throw ex;
     }
 
     private BookResponse createBookResponse(Book book) {
